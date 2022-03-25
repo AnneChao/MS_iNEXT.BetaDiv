@@ -1,0 +1,752 @@
+#' @Function fig_1a_or_3a is used to plot Figure 1 (a) or Figure 3 (a).
+#' @param output is an object computed from function 'iNEXTBetaDiv' in the package 'iNEXT.BetaDiv'.
+#' 
+fig_1a_or_3a = function(output){
+  D = names(output[[1]])
+  plot_df = lapply(1:length(output), function(i) 
+    lapply(1:length(output[[i]]), function(j) output[[i]][[j]] %>% mutate('D' = D[j])) %>% do.call(rbind,.)) %>% do.call(rbind,.)
+  
+  cbPalette <- rev(c("#999999", "#E69F00", "#56B4E9", "#009E73", 
+                     "#330066", "#CC79A7", "#0072B2", "#D55E00"))
+  if (sum(unique(plot_df$Region) %in% c("Madden", "Jejuimi")) == 2) name = "Plot" else name = "Area"
+  
+  q.lab = c("q = 0","q = 1","q = 2") ; names(q.lab) <- c(0,1,2)
+  D.lab = c("Gamma","Alpha") ; names(D.lab) <- c("gamma","alpha")
+  plot_df$D = factor(plot_df$D,levels=c("gamma","alpha"))
+  plot_df$Method = factor(plot_df$Method,levels=c("Interpolated","Extrapolated","Observed"))
+  levels(plot_df$Method) = c("Rarefaction","Extrapolation","Observed")
+  
+  pt_df = data.frame()
+  for(j in 1:length(unique(plot_df$Region))){
+    
+    obs_df = subset(plot_df,Region==unique(plot_df$Region)[j] & Method=="Observed")
+    ref = unique(obs_df$Size) %>% round()
+    dou_ref = subset(plot_df,Region==unique(plot_df$Region)[j] & round(Size) == 2*ref )
+    
+    pt_df = rbind(pt_df,obs_df,dou_ref)
+    
+  }
+  
+  pt_df = pt_df %>% mutate(Type = paste0(Method,D))
+  pt_df$Type = factor(pt_df$Type,levels=c("Extrapolationgamma","Observedgamma","Extrapolationalpha","Observedalpha"))
+  
+  plot_df = plot_df %>% filter(!(Region=="Unlogged" & Method == "Extrapolation"))
+  pt_df = pt_df %>% filter(!(Region=="Unlogged" & Type %in% c("Extrapolationgamma", "Extrapolationalpha")))
+  
+  ggplot(plot_df, aes(x=Size,y=Estimate,color=Region))+
+    geom_point(data=pt_df,aes(shape=Type),size = 3,stroke=1.5)+
+    geom_line(data = plot_df %>% filter(Method != "Observed"), aes(lty = Method), size=1.1)+
+    geom_ribbon(aes(fill=Region,ymin=LCL,ymax=UCL),alpha=0.4,colour=NA)+
+    facet_grid(D~Order,labeller=labeller(Order=q.lab,D=D.lab),scales = "free")+
+    theme_bw()+xlab("Sample size")+ylab("Taxonomic diversity")+
+    scale_shape_manual("Reference point",values = c(17,19,2,1),
+                       labels = c("Gamma (size 2n)", "Gamma (size n)",
+                                  "Alpha (size 2n)", "Alpha (size n)"))+
+    theme(
+      plot.title = element_text(hjust = 0.5,size=15,face="bold"),
+      axis.title.x = element_text(hjust = 0.5,size=13,face='bold'),
+      axis.title.y = element_text(hjust = 0.5,size=13,face='bold'),
+      legend.title = element_text(face='bold',size=13),
+      strip.text.x = element_text(size=13,face='bold'),
+      strip.text.y = element_text(size=13,face='bold'),
+      axis.text.x=element_text(angle=45,vjust=1,hjust=1),
+      legend.position = "bottom",
+      legend.box = "vertical",
+      legend.margin = margin(0, 0, 0, 0),
+      legend.box.margin = margin(-10, -10, -5, -10),
+      plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), "pt")
+    )+
+    scale_color_manual(name,values = cbPalette)+
+    scale_fill_manual(name,values = cbPalette)+ 
+    guides(linetype = guide_legend(order = 1),
+           shape = guide_legend(order = 2))
+  
+}
+
+#' @Function fig_1b_or_3b is used to plot Figure 1 (b) or Figure 3 (b).
+#' @param output is an object computed from function 'iNEXTBetaDiv' in the package 'iNEXT.BetaDiv'.
+#' 
+fig_1b_or_3b = function(output){
+  cbPalette <- rev(c("#999999", "#E69F00", "#56B4E9", "#009E73", 
+                     "#330066", "#CC79A7", "#0072B2", "#D55E00"))
+  
+  gamma = lapply(output, function(y) y[["gamma"]]) %>% do.call(rbind,.) %>% mutate(div_type = "Gamma") %>% as_tibble()
+  alpha = lapply(output, function(y) y[["alpha"]]) %>% do.call(rbind,.) %>% mutate(div_type = "Alpha") %>% as_tibble()
+  beta =  lapply(output, function(y) y[["beta"]])  %>% do.call(rbind,.) %>% mutate(div_type = "Beta")  %>% as_tibble()
+  beta = beta %>% filter(Method != 'Observed')
+  beta[beta == 'Observed_alpha'] = 'Observed'
+  
+  gamma1 = data.frame() ; alpha1 = data.frame() ; beta1 = data.frame()
+  
+  for(i in 1:length(unique(gamma$Region))){
+    
+    Gamma <- gamma %>% filter(Region==unique(gamma$Region)[i]) ; ref_size = unique(Gamma[Gamma$Method=="Observed",]$Size)
+    Gamma = Gamma %>% filter(!(Order==0 & round(Size)>2*ref_size))
+    
+    Alpha <- alpha %>% filter(Region==unique(gamma$Region)[i]) ; Alpha = Alpha %>% filter(!(Order==0 & round(Size)>2*ref_size))
+    Beta <- beta %>% filter(Region==unique(gamma$Region)[i]) ; Beta = Beta %>% filter(!(Order==0 & round(Size)>2*ref_size))
+    
+    gamma1 = rbind(gamma1,Gamma) ; alpha1 = rbind(alpha1,Alpha) ; beta1 = rbind(beta1,Beta)
+    
+  }
+  
+  gamma = gamma1 ; alpha = alpha1 ; beta= beta1
+  
+  df = rbind(gamma, alpha, beta)
+  for (i in unique(gamma$Order)) df$Order[df$Order == i] = paste0('q = ', i)
+  df$div_type <- factor(df$div_type, levels = c("Gamma","Alpha","Beta"))
+  
+  id_obs = which(df$Method == 'Observed')
+  
+  for (i in 1:length(id_obs)) {
+    
+    new = df[id_obs[i],]
+    new$level = new$level - 0.0001
+    new$Method = 'Interpolated'
+    
+    newe = df[id_obs[i],]
+    newe$level = newe$level + 0.0001
+    newe$Method = 'Extrapolated'
+    
+    df = rbind(df, new, newe)
+    
+  }
+  
+  lty = c(Interpolated = "solid", Extrapolated = "dashed")
+  df$Method = factor(df$Method, levels = c('Interpolated', 'Extrapolated', 'Observed'))
+  
+  double_size = unique(df[df$Method == "Observed",]$Size)*2
+  double_extrapolation = df %>% filter(Method == "Extrapolated" & round(Size) %in% double_size)
+  
+  Orderq = unique(df$Order)
+  
+  if (sum(names(output) %in% c("Madden", "Jejuimi")) == 2) {
+	ggplot(df, aes(x = level, y = Estimate, col = Region)) +
+	  geom_ribbon(aes(ymin = LCL, ymax = UCL, fill = Region, col = NULL), alpha=0.3) + 
+	  geom_line(data = subset(df, Method!='Observed'), aes(linetype=Method), size=1.1) + scale_linetype_manual(values = lty) +
+	  geom_point(data = subset(df, Method == 'Observed' & div_type == "Gamma"), shape = 19, size = 3) + 
+	  geom_point(data = subset(df, Method == 'Observed' & div_type != "Gamma"), shape = 1, size = 3, stroke = 1.5)+
+	  geom_point(data = subset(double_extrapolation, div_type == "Gamma"), shape = 17, size = 3) + 
+	  geom_point(data = subset(double_extrapolation, div_type != "Gamma"), shape = 2, size = 3, stroke = 1.5) + 
+	  facet_grid(div_type ~ Order, scales = "free_y") +
+	  theme_bw() + scale_color_manual(values = cbPalette)+
+	  scale_fill_manual(values = cbPalette)+
+	  labs(x = "Sample coverage", y = "Taxonomic diversity")+
+	  theme(legend.position = "none", legend.title = element_blank(),
+	        axis.title.x = element_text(size=13,face='bold'),
+	        axis.title.y = element_text(size=13,face='bold'),
+	        strip.text.x = element_text(size=13,face='bold'),
+	        strip.text.y = element_text(size=13,face='bold'))
+    
+  } else {
+    xrange = c(0.8, 1)
+    oq = unique(df$Order)
+    
+    pics0ga <- ggplot(data = df %>% filter(Order == oq[1] & div_type != "Beta"), aes(x = level, y = Estimate, col = Region)) +
+      geom_ribbon(aes(ymin = LCL, ymax = UCL, fill = Region, col = NULL), alpha=0.3) + 
+      geom_line(data = subset(df %>% filter(Order == oq[1] & div_type != "Beta"), Method!='Observed'), aes(linetype=Method), size=1.1) + scale_linetype_manual(values = lty) +
+      geom_point(data = subset(df %>% filter(Order == oq[1] & div_type != "Beta"), Method == 'Observed' & div_type == "Gamma"), shape = 19, size = 3) + 
+      geom_point(data = subset(df %>% filter(Order == oq[1] & div_type != "Beta"), Method == 'Observed' & div_type != "Gamma"), shape = 1, size = 3, stroke = 1.5)+
+      geom_point(data = subset(double_extrapolation %>% filter(Order == oq[1] & div_type != "Beta"), div_type == "Gamma"), shape = 17, size = 3) + 
+      geom_point(data = subset(double_extrapolation %>% filter(Order == oq[1] & div_type != "Beta"), div_type != "Gamma"), shape = 2, size = 3, stroke = 1.5) + 
+      facet_grid(div_type ~ Order, scales = "free_y") +
+      xlim(xrange) +
+      theme_bw() + scale_color_manual(values = cbPalette)+
+      scale_fill_manual(values = cbPalette)+
+      theme(legend.position = "bottom", legend.title = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            strip.text.x = element_text(size=13,face='bold'),
+            strip.text.y = element_text(size=13,face='bold'))
+    pics0ga = pics0ga + theme(strip.background.y = element_blank(), strip.text.y = element_blank())
+    
+    pics12ga <- ggplot(data = df %>% filter(Order != oq[1] & div_type != "Beta"), aes(x = level, y = Estimate, col = Region)) +
+      geom_ribbon(aes(ymin = LCL, ymax = UCL, fill = Region, col = NULL), alpha=0.3) + 
+      geom_line(data = subset(df %>% filter(Order != oq[1] & div_type != "Beta"), Method!='Observed'), aes(linetype=Method), size=1.1) + scale_linetype_manual(values = lty) +
+      geom_point(data = subset(df %>% filter(Order != oq[1] & div_type != "Beta"), Method == 'Observed' & div_type == "Gamma"), shape = 19, size = 3) + 
+      geom_point(data = subset(df %>% filter(Order != oq[1] & div_type != "Beta"), Method == 'Observed' & div_type != "Gamma"), shape = 1, size = 3, stroke = 1.5)+
+      geom_point(data = subset(double_extrapolation %>% filter(Order != oq[1] & div_type != "Beta"), div_type == "Gamma"), shape = 17, size = 3) + 
+      geom_point(data = subset(double_extrapolation %>% filter(Order != oq[1] & div_type != "Beta"), div_type != "Gamma"), shape = 2, size = 3, stroke = 1.5) + 
+      facet_grid(div_type ~ Order, scales = "free_y") +
+      xlim(xrange) +
+      theme_bw() + scale_color_manual(values = cbPalette)+
+      scale_fill_manual(values = cbPalette)+
+      theme(legend.position = "bottom", legend.title = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            strip.text.x = element_text(size=13,face='bold'),
+            strip.text.y = element_text(size=13,face='bold'))
+    
+    pics0b <- ggplot(data = df %>% filter(Order == oq[1] & div_type == "Beta"), aes(x = level, y = Estimate, col = Region)) +
+      geom_ribbon(aes(ymin = LCL, ymax = UCL, fill = Region, col = NULL), alpha=0.3) + 
+      geom_line(data = subset(df %>% filter(Order == oq[1] & div_type == "Beta"), Method!='Observed'), aes(linetype=Method), size=1.1) + scale_linetype_manual(values = lty) +
+      geom_point(data = subset(df %>% filter(Order == oq[1] & div_type == "Beta"), Method == 'Observed' & div_type == "Gamma"), shape = 19, size = 3) + 
+      geom_point(data = subset(df %>% filter(Order == oq[1] & div_type == "Beta"), Method == 'Observed' & div_type != "Gamma"), shape = 1, size = 3, stroke = 1.5)+
+      geom_point(data = subset(double_extrapolation %>% filter(Order == oq[1] & div_type == "Beta"), div_type == "Gamma"), shape = 17, size = 3) + 
+      geom_point(data = subset(double_extrapolation %>% filter(Order == oq[1] & div_type == "Beta"), div_type != "Gamma"), shape = 2, size = 3, stroke = 1.5) + 
+      facet_grid(div_type ~ Order, scales = 'free_y') +
+      ylim(c(min(df %>% filter(div_type == "Beta") %>% select(LCL)), max(df %>% filter(div_type == "Beta") %>% select(UCL)))) +
+      xlim(xrange) +
+      theme_bw() + scale_color_manual(values = cbPalette)+
+      scale_fill_manual(values = cbPalette)+
+      theme(legend.position = "bottom", legend.title = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            strip.text.x = element_text(size=13,face='bold'),
+            strip.text.y = element_text(size=13,face='bold'))
+    pics0b = pics0b + theme(strip.background.x = element_blank(), strip.text.x = element_blank(),
+                            strip.background.y = element_blank(), strip.text.y = element_blank())
+    
+    pics12b <- ggplot(data = df %>% filter(Order != oq[1] & div_type == "Beta"), aes(x = level, y = Estimate, col = Region)) +
+      geom_ribbon(aes(ymin = LCL, ymax = UCL, fill = Region, col = NULL), alpha=0.3) + 
+      geom_line(data = subset(df %>% filter(Order != oq[1] & div_type == "Beta"), Method!='Observed'), aes(linetype=Method), size=1.1) + scale_linetype_manual(values = lty) +
+      geom_point(data = subset(df %>% filter(Order != oq[1] & div_type == "Beta"), Method == 'Observed' & div_type == "Gamma"), shape = 19, size = 3) + 
+      geom_point(data = subset(df %>% filter(Order != oq[1] & div_type == "Beta"), Method == 'Observed' & div_type != "Gamma"), shape = 1, size = 3, stroke = 1.5)+
+      geom_point(data = subset(double_extrapolation %>% filter(Order != oq[1] & div_type == "Beta"), div_type == "Gamma"), shape = 17, size = 3) + 
+      geom_point(data = subset(double_extrapolation %>% filter(Order != oq[1] & div_type == "Beta"), div_type != "Gamma"), shape = 2, size = 3, stroke = 1.5) + 
+      facet_grid(div_type ~ Order, scales = 'free_y') +
+      ylim(c(min(df %>% filter(div_type == "Beta") %>% select(LCL)), max(df %>% filter(div_type == "Beta") %>% select(UCL)))) +
+      xlim(xrange) +
+      theme_bw() + scale_color_manual(values = cbPalette)+
+      scale_fill_manual(values = cbPalette)+
+      theme(legend.position = "bottom", legend.title = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            strip.text.x = element_text(size=13,face='bold'),
+            strip.text.y = element_text(size=13,face='bold'))
+    pics12b = pics12b + theme(strip.background.x = element_blank(), strip.text.x = element_blank())
+    
+    ans <- ggarrange(pics0ga, pics0b, ncol = 1, nrow = 2, common.legend = TRUE, 
+                     align = 'v', legend = 'none', heights = c(2,1))
+    
+    ans2 <- ggarrange(pics12ga, pics12b, ncol = 1, nrow = 2, common.legend = TRUE, 
+                      align = 'v', legend = 'none', heights = c(2,1))
+    
+    out = ggarrange(plotlist = list(ans, ans2), ncol = 2, nrow = 1, common.legend = TRUE, 
+                    align = 'v', legend = 'none', widths = c(1,2))
+    
+    
+    annotate_figure(out, left = text_grob("Taxonomic diversity", rot = 90, size = 13, hjust = 0.5,face='bold'),
+                    bottom= text_grob("Sample coverage",size=13, hjust = 0.5,face='bold'))
+  }
+}
+
+#' @Function fig_2 is used to plot Figure 2.
+#' @param output is an object computed from function 'iNEXTBetaDiv' in the package 'iNEXT.BetaDiv'.
+#' 
+fig_2 = function(output){
+  Fit_lm = function(x){
+    Cov <- seq(0.5,1,0.1)
+    lm <- data.frame()
+    
+    for(i in 1:length(Cov)){
+      
+      # q = 0
+      q0 <- x %>% filter(level == Cov[i] & Order==0) %>% mutate(Order.q = "q = 0")
+      fit0 <- lm(Estimate~poly(Latitude,2),data=q0)
+      ifelse((summary(fit0)[4][[1]][3,4])< 0.05 , q0$Significance <- "Significant", q0$Significance <- "Insignificant")
+      q0$Fit <- fitted(fit0)
+      
+      # q = 0 ( restricted )
+      q0_restricted <- x %>% filter(level == Cov[i] & Order==0 & Method !="Extrapolated(long-range)") %>% mutate(Order.q = "q = 0 (restricted)")
+      
+      if(nrow(q0_restricted)>1){
+        
+        fit0_restricted <- lm(Estimate~poly(Latitude,2),data=q0_restricted)
+        ifelse((summary(fit0_restricted)[4][[1]][3,4])< 0.05 , q0_restricted$Significance <- "Significant", q0_restricted$Significance <- "Insignificant")
+        q0_restricted$Fit <- fitted(fit0_restricted) 
+        
+      }
+      
+      # q = 1
+      q1 <- x %>% filter(level == Cov[i] & Order==1) %>% mutate(Order.q = "q = 1")
+      fit1 <- lm(Estimate~poly(Latitude,2),data=q1)
+      ifelse((summary(fit1)[4][[1]][3,4])< 0.05 , q1$Significance <- "Significant", q1$Significance <- "Insignificant")
+      q1$Fit <- fitted(fit1)
+      
+      # q = 2
+      q2 <- x %>% filter(level == Cov[i] & Order==2) %>% mutate(Order.q = "q = 2")
+      fit2 <- lm(Estimate~poly(Latitude,2),data=q2)
+      ifelse((summary(fit2)[4][[1]][3,4])< 0.05 , q2$Significance <- "Significant", q2$Significance <- "Insignificant")
+      q2$Fit <- fitted(fit2) 
+      
+      lm = rbind(lm,q0,q0_restricted,q1,q2)
+      
+    }
+    
+    # Observed ====
+    
+    # q = 0
+    q0 <- x %>% filter(Method=="Observed" & Order==0) %>% mutate(Order.q = "q = 0")
+    fit0 <- lm(Estimate~poly(Latitude,2),data=q0)
+    ifelse((summary(fit0)[4][[1]][3,4])< 0.05 , q0$Significance <- "Significant", q0$Significance <- "Insignificant")
+    q0$Fit <- fitted(fit0)
+    
+    q0_restricted = q0 ; q0_restricted$Order.q <- "q = 0 (restricted)"
+    
+    # q = 1
+    q1 <- x %>% filter(Method=="Observed" & Order==1) %>% mutate(Order.q = "q = 1")
+    fit1 <- lm(Estimate~poly(Latitude,2),data=q1)
+    ifelse((summary(fit1)[4][[1]][3,4])< 0.05 , q1$Significance <- "Significant", q1$Significance <- "Insignificant")
+    q1$Fit <- fitted(fit1)
+    
+    # q = 2
+    q2 <- x %>% filter(Method=="Observed" & Order==2) %>% mutate(Order.q = "q = 2")
+    fit2 <- lm(Estimate~poly(Latitude,2),data=q2)
+    ifelse((summary(fit2)[4][[1]][3,4])< 0.05 , q2$Significance <- "Significant", q2$Significance <- "Insignificant")
+    q2$Fit <- fitted(fit2)
+    
+    Obs <- rbind(q0,q0_restricted,q1,q2)
+    
+    out = rbind(lm,Obs)
+    
+    return(out)
+  }
+  
+  output = Fit_lm(output)
+  target_C = c(0.5, 0.6, 0.7, 0.8, 0.9, 1)
+  
+  # Filter data
+  data = output %>% filter(Method=="Observed" | round(level,1) %in% target_C )
+  data = data %>% mutate(Coverage = ifelse(Method=="Observed",Method,level) )
+  data$Coverage <- factor(data$Coverage, levels = c("Observed",sort(target_C)))
+  data$Method <- factor(data$Method,
+                        levels = c("Observed","Interpolated","Extrapolated(short-range)","Extrapolated(long-range)"))
+  levels(data$Method) <- c("Observed","Interpolated","Extrapolated (short-range)","Extrapolated (long-range)")
+  Cov.lab = c("Observed data",paste0("Coverage = ",sort(target_C)*100,"%")) 
+  names(Cov.lab) <- c("Observed",sort(target_C))
+  if(1 %in% target_C){ Cov.lab[which(Cov.lab=="Coverage = 100%")] <- "Asymptotic"  }
+  
+  ggplot(data,aes(x=Latitude,col=Method))+
+    geom_point(aes(y=Estimate,shape=Method),size=0.9)+
+    geom_line(aes(y=Fit,lty=Significance),col="purple",lwd=0.8)+
+    facet_grid(Coverage~Order.q,labeller = labeller(Coverage=Cov.lab),scales = "free_y")+
+    scale_colour_manual("Estimate",values = c("gray","black","red","#00BFC4"))+
+    scale_shape_manual("Estimate",values = c(19,19,15,1) )+
+    theme_bw()+ylab("Beta diversity")+
+    theme(axis.title.x = element_text(hjust = 0.5,size=12,face="bold"),
+          axis.title.y = element_text(hjust = 0.5,size=12,face="bold"),
+          strip.text.x = element_text(face = "bold"),
+          strip.text.y = element_text(face = "bold"),
+          legend.position = "bottom",
+          legend.box = "vertical",
+          legend.key.width = unit(1.2, "cm"), 
+          legend.margin = margin(0, 0, 0, 0),
+          legend.box.margin = margin(-10, -10, -5, -10), 
+          legend.title = element_text(face = "bold"),
+          plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), "pt")) + 
+    guides(linetype = guide_legend(keywidth = 2.5))
+}
+#' @Function SGF.data.transf is used to transform six forests data into proposed data format for function 'iNEXTBetaDiv'.
+#' @param data is the incidence raw data.
+#' 
+SGF.data.transf = function(data) {
+  goal_year = 2005:2017
+  
+  tr.data = lapply(2:length(goal_year), function(i) {
+    tmp1 = (data %>% filter(Year == goal_year[1]))[,-(1:2)] %>% t(.); tmp1[tmp1 > 1] = 1
+    tmp2 = (data %>% filter(Year == goal_year[i]))[,-(1:2)] %>% t(.); tmp2[tmp2 > 1] = 1
+    
+    if (ncol(tmp1) == ncol(tmp2)) {
+      list(tmp1, tmp2)
+    } else {
+      tmp1 = (data %>% filter(Year == goal_year[1]))[,-1]
+      tmp2 = (data %>% filter(Year == goal_year[i]))[,-1]
+      tmp = merge(tmp1, tmp2, by = 'Subplot', all = T)
+      tmp[is.na(tmp)] = 0
+      tmp = t(tmp[,-1])
+      tmp[tmp > 1] = 1
+      list(tmp[1:(nrow(tmp)/2),], tmp[(nrow(tmp)/2+1):nrow(tmp),])
+    }
+  })
+  
+  names(tr.data) = goal_year[-1]
+  
+  return(tr.data)
+}
+
+#' @Function for_fig_4 is used to calculate standardized beta diversity for Figure 4.
+#' @param data is used for six rainforests.
+#' @param nboot is a positive integer specifying the number of bootstrap replications when assessing sampling uncertainty and constructing confidence intervals. 
+#' 
+for_fig_4 = function(data, coverage, nboot) {
+  coverage = c(0.8, 0.9, 0.95, 1)
+  
+  Choose.beta = iNEXTBetaDiv(data, level = coverage, datatype = "incidence_raw", nboot = nboot)
+  
+  
+  Choose.D = rbind(lapply(Choose.beta, function(x) x[names(x) %in% c("gamma","alpha","beta")] %>% do.call(rbind,.) %>% filter(Method == "Observed") %>% 
+                            mutate(class = rep(c("Gamma","Alpha","Beta"), each=3))) %>% do.call(rbind,.) %>% arrange(Order),
+                   
+                   lapply(Choose.beta, function(x) x[names(x) %in% c("gamma","alpha","beta")] %>% do.call(rbind,.) %>% filter(level %in% coverage) %>% 
+                            mutate(class = rep(c("Gamma","Alpha","Beta"), each = 3*length(coverage)))) %>% 
+                     do.call(rbind,.) %>% arrange(Order) %>% filter(level %in% coverage)
+  )
+  
+  Choose.D$Order = as.factor(Choose.D$Order); levels(Choose.D$Order) = c("q = 0", "q = 1", "q = 2")
+  Choose.D$Region = as.numeric(Choose.D$Region)
+  Choose.D = Choose.D %>% filter(class == "Beta")
+  
+  return(Choose.D)
+}
+
+#' @Function fig_4 is used to plot Figure 4.
+#' @param output is an output from the function 'for_fig_4' to plot figure 4.
+#' 
+fig_4 = function(output) {
+  site.order = c("Cuatro Rios", "Lindero el Peje", "Tirimbina", "Lindero Sur", "Finca el Bejuco", "Juan Enriquez")
+  
+  output = lapply(1:length(output),  function(i) output[[i]]  %>% cbind(., Site=site.order[i])) %>% do.call(rbind,.)
+  output$Site = factor(output$Site, levels=site.order)
+  output$Age = sapply(output$Site, function(x) age[age$Assem==x,"Age"])
+  
+  y_limit = c(0.85, 1.60)
+  output[is.na(output$level), 'level'] = 'Observed'
+  output$level = factor(output$level, levels = c("Observed", "0.8", "0.9", "0.95", "1"))
+  
+  if (!is.null(y_limit)) {
+    output$LCL[output$LCL <= y_limit[1]] = y_limit[1]
+    output$UCL[output$UCL >= y_limit[2]] = y_limit[2]
+  }
+  
+  ggplot(output, aes(x = Age, y = Estimate)) + geom_line(aes(x = Region + Age - 1997, y = Estimate, colour = Site), size = 0.7) +
+    geom_ribbon(aes(x = Region + Age - 1997, ymin = LCL, ymax = UCL, fill = Site), alpha = 0.2, linetype = 0) +
+    geom_point(aes(x = Region + Age - 1997, y = Estimate, colour = Site, shape = Site), size = 1.5) +
+    facet_grid(level ~ Order, labeller = labeller(level = c(`Observed` = "Observed data", `0.8` = "Coverage = 80%", `0.9` = "Coverage = 90%", 
+                                                            `0.95` = "Coverage = 95%", `1` = "Asymptotic"))) +
+    labs(x = "Forest age (yr)", y = 'Beta diversity') +
+    theme_bw() +
+    scale_colour_manual(values = c("red", "darkorange", "steelblue1", "blue", "springgreen", "green4")) +
+    scale_fill_manual(values = c("red", "darkorange", "steelblue1", "blue", "springgreen", "green4")) +
+    scale_shape_manual(values = c(15, 16, 17, 18, 3, 8)) +
+    theme(legend.position = "bottom", 
+          legend.box = "vertical", 
+          legend.title = element_blank(), 
+          legend.margin = margin(0, 0, 0, 0), 
+          legend.box.margin = margin(-10, -10, -5, -10), 
+          text = element_text(size = 16), 
+          plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), "pt"),
+          axis.text = element_text(size = 16),
+          strip.text.x = element_text(size = 13, face = 'bold'),
+          strip.text.y = element_text(size = 13, face = 'bold')
+    ) +
+    scale_x_continuous(breaks = c(10, 20, 30, 40), labels = c(10, 20, 30, 40))
+  
+}
+
+#' @Function rarefysamples is used to re-sampling the specified number of Sample ID.
+#' @param data is used for re-sampling.
+#' @param minsample is a positive integer rarefying the number of Sample ID.
+#' 
+rarefysamples <- function(data, minsample = 28) {
+  Year = data$Year
+  SampleID = data$SampleID
+  Species = data$Species
+  Abundance = data$Abundance
+  resamps = 1
+  
+  rareftab<-data.frame(array(NA,dim=c(0,3)))
+  ## getting vector with number of samples per year
+  for(repeats in 1:resamps){
+    raref<-data.frame(array(NA,dim=c(1,3)))
+    names(raref)<-c("Year","Species","Abundance")
+    for(i in 1:ncol(groupyear)){
+      y = groupyear[,i]
+      
+      ## getting samples for this year
+      samps<-unique(paste(Year[Year %in% y], SampleID[Year %in% y], sep = 'X'))
+      
+      ## re-sampling to equalize number of samples
+      sam<-as.character(sample(samps,minsample,replace=F))
+      
+      ## getting data that belongs to bootstrapped samples
+      rarefyear<-data.frame(SampleID[Year %in% y][ which(paste(Year[Year %in% y], SampleID[Year %in% y], sep = 'X') %in% sam)], 
+                            Species[Year %in% y][  which(paste(Year[Year %in% y], SampleID[Year %in% y], sep = 'X') %in% sam)], 
+                            Abundance[Year %in% y][which(paste(Year[Year %in% y], SampleID[Year %in% y], sep = 'X') %in% sam)])
+      names(rarefyear)<-c("SampleID", "Species", "Abundance")
+      
+      ## calculating pooled abundances of each species to store
+      spabun<-tapply(as.numeric(rarefyear[,3]),as.character(rarefyear[,2]),sum)
+      
+      spar<-data.frame(rep(mean(y), length(spabun)),names(spabun),spabun, row.names=NULL)
+      names(spar)<-c("Year","Species","Abundance")
+      raref<-rbind(raref,spar)
+    }
+    ## calculating year by species table of abundance
+    rareftab<-rbind(rareftab,cbind(rep(repeats,dim(raref)[1]),raref))
+  }
+  ## return data frame
+  return(rareftab)
+}
+
+
+#' @Function fig_5a is used to plot Figure 5(a).
+#' @param output is an output from iNEXTBetaDiv to plot Figure 5(a).
+#' 
+fig_5a = function(output) {
+  plotlist = list()
+  
+  for (k in 1:length(output)) {
+    df = output[[k]] %>% filter(div_type == 'beta')
+    q = unique(df$Order)
+    
+    anova = list()
+    
+    for (x in 1:length(unique(df$Latitude))) {
+      anovs <- matrix(NA, nrow = length(q), ncol = length(unique(df$level)))
+      
+      for(i in 1:length(q)) {
+        for(j in 1:length(unique(df$level))) {
+          myout_ <- df %>% filter(Order == q[i], level == unique(df$level)[j], Latitude == unique(df$Latitude)[x])
+          tmp <- lm(formula = Estimate ~ Region, data = myout_) %>% summary
+          anovs[i, j] <- tmp$coefficients[nrow(tmp$coefficients), ncol(tmp$coefficients)]
+        }
+      }
+      
+      rownames(anovs) <- q
+      colnames(anovs) <- unique(df$level)
+      
+      
+      anovs <- cbind(Order = q, anovs) %>% 
+        as_tibble(.) %>% 
+        melt(., id.vars = c('Order'), variable.name = 'level', value.name = 'pvalue') %>% as_tibble() %>% 
+        mutate(sig = as.numeric(pvalue < 0.05), Latitude = unique(df$Latitude)[x]) %>% select(-pvalue)
+      
+      anova[[x]] = anovs
+    }
+    
+    anova = do.call(rbind, anova)
+    
+    
+    df = df %>% arrange(Order, level, Latitude)
+    df <- df %>% group_by(Order, level, Latitude) %>% 
+      do(lm(formula = Estimate ~ Region, data = . ) %>% predict %>% tibble(fit = .)) %>% 
+      ungroup %>% select(fit) %>% bind_cols(df) %>% select(Region, Order, Estimate, Latitude, level, fit)
+    
+    df <- melt(df, id.vars = c('Region', 'Order', 'Latitude', 'level'), variable.name = 'type', value.name = 'Beta') %>% as_tibble() 
+    df <- df %>% mutate(poly_ord = ifelse(type == 'Estimate', 0, 1))
+    df <- left_join(x = df, y = anova, by = c('Order', 'Latitude', 'level')) %>% select(-poly_ord)
+    
+    df$level <- as.character(df$level)
+    df$level = paste('Coverage = ', df$level, sep = '')
+    df$level[df$level == 'Coverage = Observed'] = 'Observed'
+    df$level = as.factor(df$level)
+    if ('Observed' %in% df$level) df$level = factor(df$level, level = levels(df$level)[c(length(levels(df$level)), 1:(length(levels(df$level))-1))])
+    
+    df$type <- factor(df$type, levels = unique(df$type))
+    df$sig <- factor(df$sig, levels = c(1, 0))
+    df$Order <- factor(df$Order, levels = q)
+    if (sum(c('North', 'South') %in% df$Latitude) == 2) 
+      df$Latitude = factor(df$Latitude, levels = c('North', 'South'))
+    
+    if (length(unique(df$Latitude)) == 2) cbPalette = c("#0000cd","#dc143c") else cbPalette = "#228b22"
+    
+    df = ggplot(df) + theme_bw() +
+      geom_line(data = subset(df, type == 'Estimate'), aes(x = Region, y = Beta, colour = Latitude), size = 0.7, alpha = 0.3, linetype = 1) +
+      geom_line(data = subset(df, type == 'fit'), aes(x = Region, y = Beta, size = sig, linetype = sig, colour = Latitude), size = 1.05, alpha = 1.2) +
+      geom_point(data = subset(df, type == 'Estimate'), aes(x = Region, y = Beta, colour = Latitude), size = 0.9) +
+      facet_grid(level ~ Order,
+                 labeller = labeller(Order = c(`0` = "q = 0", `1` = "q = 1", `2` = "q = 2"),
+                                     level = c(`Observed` = "Observed", `Coverage = 0.99` = "Coverage = 99%", 
+                                               `Coverage = 0.999` = "Coverage = 99.9%", `Coverage = 1` = "Asymptotic")
+                 )) +
+      scale_color_manual(values = cbPalette, name = NULL) +
+      scale_linetype_manual(values = c("1" = "solid", "0" = "dashed"),
+                            labels = c("Significant slope (P < 0.05)", "Insignificant slope"),
+                            limits = c("1", "0")) + 
+      scale_size_manual(values = c(1, 1.1), guide = FALSE) +
+      labs(x = 'Year', y = 'Beta Diversity') +
+      theme(legend.position = 'bottom', legend.direction = "vertical",
+            legend.text = element_text(size = 12),
+            legend.title =  element_blank(),
+            axis.text.y = element_text(size = 10),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            plot.title = element_text(hjust = 0.5, size = 17),
+            strip.text.x = element_text(size = 13, face = 'bold'),
+            strip.text.y = element_text(size = 13, face = 'bold')) 
+    plotlist[[k]] <- df
+  }
+  return(plotlist)
+}
+#' @Function fig_5b is used to plot Figure 5 (b).
+#' @param output is an output from iNEXTBetaDiv to plot Figure 5 (b).
+#' @param goalC is the specified sample coverage to plot temporal or spatial gamma, alpha, and beta diversity with order q.
+#' 
+fig_5b = function(output, goalC) {
+  plotlist = list()
+  scaleFUN <- function(x) sprintf("%.1f", x) 
+  
+  for (k in 1:length(output)) {
+    if (is.null(goalC) == TRUE) df = output[[k]] %>% filter(!(level %in% c(0.9, 0.95, 0.99, 0.999, 0.9995, 0.9999, 1))) else df = output[[k]] %>% filter(level == goalC)
+    q = unique(df$Order)
+    
+    anova = list()
+    
+    for (x in 1:length(unique(df$Latitude))) {
+      anovs <- matrix(NA, nrow = length(q), ncol = length(unique(df$div_type)))
+      
+      for(i in 1:length(q)) {
+        for(j in 1:length(unique(df$div_type))) {
+          myout_ <- df %>% filter(Order == q[i], div_type == unique(df$div_type)[j], Latitude == unique(df$Latitude)[x])
+          tmp <- lm(formula = Estimate ~ Region, data = myout_) %>% summary
+          anovs[i, j] <- tmp$coefficients[nrow(tmp$coefficients), ncol(tmp$coefficients)]
+        }
+      }
+      
+      rownames(anovs) <- q
+      colnames(anovs) <- unique(df$div_type)
+      
+      
+      anovs <- cbind(Order = q, anovs) %>% 
+        as_tibble(.) %>% 
+        melt(., id.vars = c('Order'), variable.name = 'div_type', value.name = 'pvalue') %>% as_tibble() %>% 
+        mutate(sig = as.numeric(pvalue < 0.05), Latitude = unique(df$Latitude)[x]) %>% select(-pvalue)
+      
+      anova[[x]] = anovs
+    }
+    
+    anova = do.call(rbind, anova)
+    
+    
+    df = df %>% arrange(Order, div_type, Latitude)
+    df <- df %>% group_by(Order, div_type, Latitude) %>% 
+      do(lm(formula = Estimate ~ Region, data = . ) %>% predict %>% tibble(fit = .)) %>% 
+      ungroup %>% select(fit) %>% bind_cols(df) %>% select(Region, Order, Estimate, Latitude, div_type, fit)
+    
+    df <- melt(df, id.vars = c('Region', 'Order', 'Latitude', 'div_type'), variable.name = 'type') %>% as_tibble() 
+    df <- df %>% mutate(poly_ord = ifelse(type == 'Estimate', 0, 1))
+    df <- left_join(x = df, y = anova, by = c('Order', 'Latitude', 'div_type')) %>% select(-poly_ord)
+    
+    df$div_type <- as.character(df$div_type)
+    df$div_type = factor(df$div_type, levels = c('gamma', 'alpha', 'beta'))
+    if (sum(c('South', 'North') %in% df$Latitude) == 2) 
+      df$Latitude = factor(df$Latitude, levels = c('North', 'South'))
+    
+    df$type <- factor(df$type, levels = unique(df$type))
+    df$sig <- factor(df$sig, levels = c(1, 0))
+    df$Order <- factor(df$Order, levels = q)
+    
+    if (length(unique(df$Latitude)) == 2) cbPalette = c("#0000cd","#dc143c") else cbPalette = "#228b22"
+    if (names(output)[k] == 'temporal') 
+      lab = labeller(Order = c(`0` = "q = 0", `1` = "q = 1", `2` = "q = 2"),
+                     div_type = c('beta' = 'Temporal beta', 'alpha' = 'Temporal alpha', 'gamma' = 'Temporal gamma')) else 
+                       lab = labeller(Order = c(`0` = "q = 0", `1` = "q = 1", `2` = "q = 2"),
+                                      div_type = c('beta' = 'Spatial beta', 'alpha' = 'Spatial alpha', 'gamma' = 'Spatial gamma'))
+    
+    pics2 <- list()
+    pics2[[1]] <- ggplot() + theme_bw() +
+      geom_line(data = subset(df, type == 'Estimate' & Order == unique(df$Order)[1] & div_type != 'beta'), aes(x = Region, y = value, colour = Latitude), size = 0.7, alpha = 0.3, linetype = 1) +
+      geom_line(data = subset(df, type == 'fit' & Order == unique(df$Order)[1] & div_type != 'beta'), aes(x = Region, y = value, size = sig, linetype = sig, colour = Latitude), alpha = 1.05) +
+      geom_point(data = subset(df, type == 'Estimate' & Order == unique(df$Order)[1] & div_type != 'beta'), aes(x = Region, y = value, size = sig, colour = Latitude), size = 0.9) +
+      facet_grid(div_type ~ Order, labeller = lab) +
+      scale_color_manual(values = cbPalette, name = NULL) +
+      scale_linetype_manual(values = c("1" = "solid", "0" = "dashed"),
+                            labels = c("Significant slope (P < 0.05)", "Insignificant slope"),
+                            limits = c("1", "0"), name = NULL) + 
+      scale_size_manual(values = c(0.9, 1), guide = FALSE) +
+      theme(legend.position = 'bottom', legend.direction = 'vertical',
+            legend.text = element_text(size = 12),
+            legend.title = element_text(size = 15),
+            plot.title = element_text(hjust = 0.5, size = 17),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_text(size = 10),
+            strip.text.x = element_text(size = 13, face = 'bold'),
+            strip.text.y = element_text(size = 13, face = 'bold')) +
+      guides(color = guide_legend(override.aes = list(size = 1))) + 
+      theme(strip.background.y = element_blank(), strip.text.y = element_blank()) +
+      ylim(c((df %>% filter(div_type != 'beta', Order == 0) %>% select(value) %>% min) - 10,
+             df %>% filter(div_type != 'beta', Order == 0) %>% select(value) %>% max))
+    
+    pics2[[2]] <- ggplot() + theme_bw() +
+      geom_line(data = subset(df, type == 'Estimate' & Order != unique(df$Order)[1] & div_type != 'beta'), aes(x = Region, y = value, colour = Latitude), size = 0.7, alpha = 0.3, linetype = 1) +
+      geom_line(data = subset(df, type == 'fit' & Order != unique(df$Order)[1] & div_type != 'beta'), aes(x = Region, y = value, size = sig, linetype = sig, colour = Latitude), alpha = 1.05) +
+      geom_point(data = subset(df, type == 'Estimate' & Order != unique(df$Order)[1] & div_type != 'beta'), aes(x = Region, y = value, size = sig, colour = Latitude), size = 1.2) +
+      facet_grid(div_type ~ Order, labeller = lab) +
+      scale_color_manual(values = cbPalette, name = NULL) +
+      scale_linetype_manual(values = c("1" = "solid", "0" = "dashed"),
+                            labels = c("Significant slope (P < 0.05)", "Insignificant slope"),
+                            limits = c("1", "0"), name = NULL) + 
+      scale_size_manual(values = c(0.9, 1), guide = FALSE) +
+      theme(legend.position = 'bottom', legend.direction = 'vertical',
+            legend.text = element_text(size = 12),
+            legend.title = element_text(size = 15),
+            plot.title = element_text(hjust = 0.5, size = 17),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_text(size = 10),
+            strip.text.x = element_text(size = 13, face = 'bold'),
+            strip.text.y = element_text(size = 13, face = 'bold')) +
+      guides(color = guide_legend(override.aes = list(size = 1))) +
+      scale_y_continuous(labels = scaleFUN, 
+                         limit = c(df %>% filter(div_type != 'beta', Order != 0) %>% select(value) %>% min,
+                                   (df %>% filter(div_type != 'beta', Order != 0) %>% select(value) %>% max)+6))
+    
+    pics2[[3]] <- ggplot() + theme_bw() +
+      geom_line(data = subset(df, type == 'Estimate' & Order == unique(df$Order)[1] & div_type == 'beta'), aes(x = Region, y = value, colour = Latitude), size = 0.7, alpha = 0.3, linetype = 1) +
+      geom_line(data = subset(df, type == 'fit' & Order == unique(df$Order)[1] & div_type == 'beta'), aes(x = Region, y = value, size = sig, linetype = sig, colour = Latitude), alpha = 1.05) +
+      geom_point(data = subset(df, type == 'Estimate' & Order == unique(df$Order)[1] & div_type == 'beta'), aes(x = Region, y = value, size = sig, colour = Latitude), size = 1.2) +
+      facet_grid(div_type ~ Order, labeller = lab) +
+      scale_color_manual(values = cbPalette, name = NULL) +
+      scale_linetype_manual(values = c("1" = "solid", "0" = "dashed"),
+                            labels = c("Significant slope (P < 0.05)", "Insignificant slope"),
+                            limits = c("1", "0"), name = NULL) + 
+      scale_size_manual(values = c(0.9, 1), guide = FALSE) +
+      theme(legend.position = 'bottom', legend.direction = 'vertical',
+            legend.text = element_text(size = 12),
+            legend.title = element_text(size = 15),
+            axis.text.y = element_text(size = 10),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            plot.title = element_text(hjust = 0.5, size = 17),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            strip.text.x = element_text(size = 13, face = 'bold'),
+            strip.text.y = element_text(size = 13, face = 'bold')) +
+      guides(color = guide_legend(override.aes = list(size = 1))) + 
+      theme(strip.background.x = element_blank(), strip.text.x = element_blank(),
+            strip.background.y = element_blank(), strip.text.y = element_blank()) +
+      ylim(c(1,2))
+    
+    pics2[[4]] <- ggplot() + theme_bw() +
+      geom_line(data = subset(df, type == 'Estimate' & Order != unique(df$Order)[1] & div_type == 'beta'), aes(x = Region, y = value, colour = Latitude), size = 0.7, alpha = 0.3, linetype = 1) +
+      geom_line(data = subset(df, type == 'fit' & Order != unique(df$Order)[1] & div_type == 'beta'), aes(x = Region, y = value, size = sig, linetype = sig, colour = Latitude), alpha = 1.05) +
+      geom_point(data = subset(df, type == 'Estimate' & Order != unique(df$Order)[1] & div_type == 'beta'), aes(x = Region, y = value, size = sig, colour = Latitude), size = 1.2) +
+      facet_grid(div_type ~ Order, labeller = lab) +
+      scale_color_manual(values = cbPalette, name = NULL) +
+      scale_linetype_manual(values = c("1" = "solid", "0" = "dashed"),
+                            labels = c("Significant slope (P < 0.05)", "Insignificant slope"),
+                            limits = c("1", "0"), name = NULL) + 
+      scale_size_manual(values = c(0.9, 1), guide = FALSE) +
+      theme(legend.position = 'bottom', legend.direction = 'vertical',
+            legend.text = element_text(size = 12),
+            legend.title = element_text(size = 15),
+            axis.text.y = element_text(size = 10),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            plot.title = element_text(hjust = 0.5, size = 17),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            strip.text.x = element_text(size = 13, face = 'bold'),
+            strip.text.y = element_text(size = 13, face = 'bold')) +
+      guides(color = guide_legend(override.aes = list(size = 1))) + 
+      theme(strip.background.x = element_blank(), strip.text.x = element_blank()) +
+      ylim(c(1,2))
+    
+    
+    p1 = pics2[[1]] + pics2[[2]] + plot_layout(widths = c(1, 2))
+    p2 = pics2[[3]] + pics2[[4]] + plot_layout(widths = c(1, 2))
+    ans = p1/p2 + plot_layout(heights = c(2, 1), guides = 'collect') &
+      theme(legend.position = 'bottom', legend.title = element_blank(), legend.direction = "vertical")
+    gt <- patchwork::patchworkGrob(ans)
+    plotlist[[k]] <- gridExtra::grid.arrange(gt, left = "Diversity")
+    
+  }
+  return(plotlist)
+}
