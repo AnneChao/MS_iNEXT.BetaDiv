@@ -18,6 +18,6 @@ The data used for examples are based on (i) Spatial data: Gentry's global forest
 
 (3) "Source R code.txt": Source R code. 
 
-(4) "Brief guide iNEXT.BetaDiv.docx": introduction to iNEXT.BetaDiv and a brief guide to R code for making graphics in Chao et al. 2022 manuscript.
+(4) "Brief guide iNEXT BetaDiv.docx": introduction to iNEXT.BetaDiv and a brief guide to R code for making graphics in Chao et al. 2022 manuscript.
 
 (5) "Environment.RData": output.
